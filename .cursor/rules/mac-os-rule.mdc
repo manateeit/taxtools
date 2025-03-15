@@ -1,0 +1,8 @@
+---
+description: Mac OS rules
+globs: 
+alwaysApply: false
+---
+
+# Your rule content
+- I am on a mac os, so anytime you try to run a command,  do not user powershell it does not exist on my mac

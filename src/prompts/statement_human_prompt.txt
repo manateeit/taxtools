@@ -1,0 +1,6 @@
+Please process the following bank statement text and extract the required information according to the rules. The statement filename is: {filename}
+
+Statement Text:
+{text}
+
+Extract and structure the data according to the schema, ensuring all validation rules are followed. Return a JSON response with either a success status and data object, or an error status with appropriate error code and message. 

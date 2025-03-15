@@ -1,0 +1,161 @@
+# Neon Database Configuration
+
+## Project Information
+- Project Name: bankstatements
+- Project ID: billowing-cell-42253641
+- Branch ID: br-long-mode-a4jo9xpn
+- Database Name: bankstatements
+
+## Database Schema
+
+### Table: account_references
+```sql
+CREATE TABLE account_references (
+    id SERIAL PRIMARY KEY,
+    account_number VARCHAR(15) NOT NULL UNIQUE,
+    company_name VARCHAR(100) NOT NULL,
+    bank_name VARCHAR(50) NOT NULL,
+    account_type VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT valid_account_type CHECK (account_type IN ('Checking', 'Savings', 'Business'))
+);
+
+-- Create trigger for updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_account_references_updated_at
+    BEFORE UPDATE ON account_references
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Initial account data
+INSERT INTO account_references (account_number, company_name, bank_name, account_type) VALUES
+('000000228239080', 'Manatee IT LLC', 'Chase Bank', 'Business'),
+('000000954291944', 'IT DevOps LLC', 'Chase Bank', 'Business'),
+('000000333721212', 'Manatee Central LLC', 'Chase Bank', 'Business'),
+('00085695149', 'Manatee Central LLC', 'Valley Bank', 'Business'),
+('000000880865188', 'IT Managed Solutions', 'Chase Bank', 'Checking');
+```
+
+### Table: statements
+```sql
+CREATE TABLE statements (
+    id SERIAL PRIMARY KEY,
+    account_reference_id INTEGER REFERENCES account_references(id),
+    statement_date DATE NOT NULL,
+    period_start DATE NOT NULL,
+    period_end DATE NOT NULL,
+    beginning_balance DECIMAL(12,2) NOT NULL,
+    ending_balance DECIMAL(12,2) NOT NULL,
+    total_fees DECIMAL(12,2) DEFAULT 0.00,
+    filename VARCHAR(255) NOT NULL,
+    important_notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT valid_period CHECK (period_end >= period_start),
+    CONSTRAINT valid_statement_date CHECK (statement_date >= period_start AND statement_date <= period_end)
+);
+
+CREATE TRIGGER update_statements_updated_at
+    BEFORE UPDATE ON statements
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+```
+
+### Table: transactions
+```sql
+CREATE TABLE transactions (
+    id SERIAL PRIMARY KEY,
+    statement_id INTEGER REFERENCES statements(id),
+    transaction_date DATE NOT NULL,
+    description TEXT NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    transaction_type VARCHAR(10) NOT NULL,
+    tax_category VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT valid_transaction_type CHECK (transaction_type IN ('deposit', 'withdrawal')),
+    CONSTRAINT valid_tax_category CHECK (
+        tax_category IN (
+            'Domestic Business Expense',
+            'International Subcontractors',
+            'Tax Payment',
+            'Transfer',
+            'Loan Payment',
+            'Utility Payment',
+            'Professional Services'
+        ) OR tax_category IS NULL
+    )
+);
+
+CREATE TRIGGER update_transactions_updated_at
+    BEFORE UPDATE ON transactions
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+```
+
+## Usage Instructions
+
+1. Connect to the database:
+   ```sql
+   \c bankstatements
+   ```
+
+2. View all accounts:
+   ```sql
+   SELECT * FROM account_references;
+   ```
+
+3. Add a new statement:
+   ```sql
+   INSERT INTO statements (
+       account_reference_id,
+       statement_date,
+       period_start,
+       period_end,
+       beginning_balance,
+       ending_balance,
+       filename
+   ) VALUES (
+       (SELECT id FROM account_references WHERE account_number = '000000880865188'),
+       '2024-03-14',
+       '2024-03-01',
+       '2024-03-31',
+       1000.00,
+       1500.00,
+       'statement_march_2024.pdf'
+   );
+   ```
+
+4. Add transactions:
+   ```sql
+   INSERT INTO transactions (
+       statement_id,
+       transaction_date,
+       description,
+       amount,
+       transaction_type,
+       tax_category
+   ) VALUES (
+       1,
+       '2024-03-14',
+       'Online Payment',
+       500.00,
+       'deposit',
+       NULL
+   );
+   ```
+
+## Maintenance Notes
+
+1. Regular backups are automatically handled by Neon
+2. Indexes will be added based on query patterns
+3. Consider adding partitioning if data grows significantly
+4. Monitor statement storage for potential archiving needs 
